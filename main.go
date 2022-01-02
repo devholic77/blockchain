@@ -1,8 +1,12 @@
 package main
 
-import "github.com/devholic77/duckcoin/cli"
+import (
+	"github.com/devholic77/duckcoin/cli"
+	"github.com/devholic77/duckcoin/db"
+)
 
 func main() {
+	defer db.Close()
 
 	// for cli
 	cli.Start()

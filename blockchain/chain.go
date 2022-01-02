@@ -1,9 +1,7 @@
 package blockchain
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/boltdb/bolt"
@@ -15,45 +13,134 @@ var b *blockChain
 var blockDB *bolt.DB
 var once sync.Once
 
-var ErrNotFound = errors.New("block not found")
+const (
+	defaultDifficulty  = 2
+	difficultyInterval = 5
+	blockInterval      = 2
+	allowedRange       = 2
+)
 
 type blockChain struct {
-	NewestHash string `json:"newestHash"`
-	Height     int    `json:"height"`
+	NewestHash        string `json:"newestHash"`
+	Height            int    `json:"height"`
+	CurrentDifficulty int    `json:"currentDifficulty"`
 }
 
-func (b *blockChain) fromBytes(data []byte) {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.Decode(b)
+func (b *blockChain) restore(data []byte) {
+	utils.FromBytes(data, &b)
 }
 
-func (b *blockChain) persist() {
+func persist(b *blockChain) {
 	db.SaveBlockChain(utils.ToBytes(b))
 }
 
-func (b *blockChain) AddBlock(data string) {
-	block := createBlock(data, b.NewestHash, b.Height+1)
+func Blocks(b *blockChain) []*Block {
+	var blocks []*Block
+	hashCursor := b.NewestHash
+	for {
+		block, _ := FindBlock(hashCursor)
+		blocks = append(blocks, block)
+		if block.PrevHash != "" {
+			hashCursor = block.PrevHash
+		} else {
+			break
+		}
+	}
+	return blocks
+}
+
+func (b *blockChain) AddBlock() {
+	block := createBlock(b.NewestHash, b.Height+1, getDifficulty(b))
 	b.NewestHash = block.Hash
 	b.Height = block.Height
-	b.persist()
+	b.CurrentDifficulty = block.Difficulty
+	persist(b)
 }
 
 func (b *blockChain) GetBlock(hash string) Block {
 	var block Block
-	block.fromBytes(db.Block(hash))
+	block.restore(db.Block(hash))
 	return block
+}
+
+func recalculateDifficulty(b *blockChain) int {
+	allBlocks := Blocks(b)
+	neweshBlock := allBlocks[0]
+	lastRecalcurateBlock := allBlocks[difficultyInterval-1]
+
+	acutalTime := (neweshBlock.TimeStamp / 60) - (lastRecalcurateBlock.TimeStamp / 60)
+	expectedTime := difficultyInterval * blockInterval
+
+	// minute buffer +-2
+	if acutalTime <= (expectedTime - allowedRange) {
+		return b.CurrentDifficulty + 1
+	} else if acutalTime >= (expectedTime + allowedRange) {
+		return b.CurrentDifficulty - 1
+	}
+	return b.CurrentDifficulty
+}
+
+func getDifficulty(b *blockChain) int {
+	if b.Height == 0 {
+		return defaultDifficulty
+	} else if b.Height%difficultyInterval == 0 {
+		fmt.Println("called recaculate")
+		return recalculateDifficulty(b)
+	}
+	return b.CurrentDifficulty
+}
+
+func UTxOutsByAddress(address string, b *blockChain) []*UTxOut {
+	var uTxOuts []*UTxOut
+	creatorTxs := make(map[string]bool)
+	for _, block := range Blocks(b) {
+		for _, tx := range block.Transactions {
+			for _, input := range tx.TxIns {
+				if input.Owner == address {
+					creatorTxs[input.TxID] = true
+				}
+			}
+
+			for index, output := range tx.TxOuts {
+				if _, ok := creatorTxs[tx.Id]; !ok {
+					if output.Owner == address {
+						uTxOut := &UTxOut{
+							tx.Id,
+							index,
+							output.Amount,
+						}
+						if !isOnMempool(uTxOut) {
+							uTxOuts = append(uTxOuts, uTxOut)
+						}
+					}
+				}
+			}
+		}
+	}
+	return uTxOuts
+}
+
+func BalanceByAddress(address string, b *blockChain) int {
+	txOuts := UTxOutsByAddress(address, b)
+	var amount int
+	for _, txOut := range txOuts {
+		amount += txOut.Amount
+	}
+	return amount
 }
 
 func BlockChain() *blockChain {
 	if b == nil {
 		once.Do(func() {
-			b = &blockChain{"", 0}
+			b = &blockChain{
+				Height: 0,
+			}
 			blockDB = db.DB()
 			persistBlockChain := db.BlockChain()
 			if persistBlockChain == nil {
-				b.AddBlock("Genesis")
+				b.AddBlock()
 			} else {
-				b.fromBytes(persistBlockChain)
+				b.restore(persistBlockChain)
 			}
 		})
 	}

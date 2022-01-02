@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"text/template"
 
-	blockchain "github.com/devholic77/duckcoin/blockchanin"
+	blockchain "github.com/devholic77/duckcoin/blockchain"
 )
 
 const (
@@ -31,8 +31,7 @@ func add(rw http.ResponseWriter, r *http.Request) {
 		templates.ExecuteTemplate(rw, "add", nil)
 	case "POST":
 		r.ParseForm()
-		data := r.Form.Get("blockData")
-		blockchain.BlockChain().AddBlock(data)
+		blockchain.BlockChain().AddBlock()
 		http.Redirect(rw, r, "/", http.StatusPermanentRedirect)
 	}
 	templates.ExecuteTemplate(rw, "add", nil)
