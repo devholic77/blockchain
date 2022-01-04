@@ -6,10 +6,10 @@ import (
 )
 
 const (
-	dbName       = "blockchain.db"
-	dataBucket   = "data"
-	blocksBucket = "blocks"
-	checkpoint   = "checkpoint"
+	dbName           = "blockchain.db"
+	blockchainBucket = "data"
+	blocksBucket     = "blocks"
+	checkpoint       = "checkpoint"
 )
 
 var db *bolt.DB
@@ -21,7 +21,7 @@ func DB() *bolt.DB {
 		utils.HandleErr(err)
 		db = dbPointer
 		err = db.Update(func(t *bolt.Tx) error {
-			_, err = t.CreateBucketIfNotExists([]byte(dataBucket))
+			_, err = t.CreateBucketIfNotExists([]byte(blockchainBucket))
 			utils.HandleErr(err)
 
 			_, err = t.CreateBucketIfNotExists([]byte(blocksBucket))
@@ -53,7 +53,7 @@ func Block(hash string) []byte {
 
 func SaveBlockChain(data []byte) error {
 	err := DB().Update(func(t *bolt.Tx) error {
-		bucket := t.Bucket([]byte(dataBucket))
+		bucket := t.Bucket([]byte(blockchainBucket))
 		return bucket.Put([]byte(checkpoint), data)
 	})
 	return err
@@ -62,7 +62,7 @@ func SaveBlockChain(data []byte) error {
 func BlockChain() []byte {
 	var data []byte
 	DB().View(func(t *bolt.Tx) error {
-		b := t.Bucket([]byte(dataBucket))
+		b := t.Bucket([]byte(blockchainBucket))
 		data = b.Get([]byte(checkpoint))
 		return nil
 	})

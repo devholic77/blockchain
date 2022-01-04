@@ -1,0 +1,38 @@
+# doc
+http://localhost:4000/
+
+###
+# status
+GET  http://localhost:4000/status
+
+###
+# get blocks
+GET http://localhost:4000/blocks
+
+###
+# mining block
+POST http://localhost:4000/blocks
+
+
+### 
+# get blance status
+GET http://localhost:4000/balance/a45ddf13f196dac6931decf7b98744333d932e547c92554eee065ed2827376be5a87999ac3e2111270e723d1e19e41cf32781ff8942070210a35cf751a989f33
+
+###
+# get blance status 
+GET http://localhost:4000/balance/lynn?total=true
+
+###
+# get mempool
+GET http://localhost:4000/mempool
+
+###
+POST http://localhost:4000/transaction
+
+{
+	"to": "lynn",
+	"amount":10
+}
+
+### 
+GET http://localhost:4000/wallet

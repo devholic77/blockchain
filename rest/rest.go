@@ -8,6 +8,7 @@ import (
 
 	blockchain "github.com/devholic77/duckcoin/blockchain"
 	"github.com/devholic77/duckcoin/utils"
+	"github.com/devholic77/duckcoin/wallet"
 	"github.com/gorilla/mux"
 )
 
@@ -34,6 +35,10 @@ func (u urlDescription) String() string {
 type balanceResponse struct {
 	Address string `json:"address"`
 	Amount  int    `json:"amount"`
+}
+
+type walletResponse struct {
+	Address string
 }
 
 type addTxPayLoad struct {
@@ -131,12 +136,19 @@ func mempool(rw http.ResponseWriter, r *http.Request) {
 	utils.HandleErr(json.NewEncoder(rw).Encode(blockchain.Mempool))
 }
 
+func myWallet(rw http.ResponseWriter, r *http.Request) {
+	address := wallet.Wallet().Address
+	json.NewEncoder(rw).Encode(walletResponse{address})
+}
+
 func transaction(rw http.ResponseWriter, r *http.Request) {
 	var payload addTxPayLoad
 	utils.HandleErr(json.NewDecoder(r.Body).Decode(&payload))
 	err := blockchain.Mempool.AddTx(payload.To, payload.Amount)
 	if err != nil {
-		json.NewEncoder(rw).Encode(errResponse{"not enough funds"})
+		rw.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(rw).Encode(errResponse{err.Error()})
+		return
 	}
 	rw.WriteHeader(http.StatusCreated)
 }
@@ -158,6 +170,7 @@ func Start(aPort int) {
 	router.HandleFunc("/blocks/{hash:[a-f0-9]+}", block).Methods("GET")
 	router.HandleFunc("/balance/{address}", balance).Methods("GET")
 	router.HandleFunc("/mempool", mempool).Methods("GET")
+	router.HandleFunc("/wallet", myWallet).Methods("GET")
 	router.HandleFunc("/transaction", transaction).Methods("POST")
 
 	fmt.Printf("RESTAPI server Listening on http://localhost:%s\n", port)

@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/boltdb/bolt"
 	"github.com/devholic77/duckcoin/db"
 	"github.com/devholic77/duckcoin/utils"
 )
 
 var b *blockChain
-var blockDB *bolt.DB
 var once sync.Once
 
 const (
@@ -47,6 +45,23 @@ func Blocks(b *blockChain) []*Block {
 		}
 	}
 	return blocks
+}
+
+func Txs(b *blockChain) []*Tx {
+	var txs []*Tx
+	for _, block := range Blocks(b) {
+		txs = append(txs, block.Transactions...)
+	}
+	return txs
+}
+
+func FindTx(b *blockChain, targetID string) *Tx {
+	for _, tx := range Txs(b) {
+		if tx.Id == targetID {
+			return tx
+		}
+	}
+	return nil
 }
 
 func (b *blockChain) AddBlock() {
@@ -96,14 +111,18 @@ func UTxOutsByAddress(address string, b *blockChain) []*UTxOut {
 	for _, block := range Blocks(b) {
 		for _, tx := range block.Transactions {
 			for _, input := range tx.TxIns {
-				if input.Owner == address {
+				if input.Signature == "COINBASE" {
+					break
+				}
+
+				if FindTx(b, input.TxID).TxOuts[input.Index].Address == address {
 					creatorTxs[input.TxID] = true
 				}
 			}
 
 			for index, output := range tx.TxOuts {
 				if _, ok := creatorTxs[tx.Id]; !ok {
-					if output.Owner == address {
+					if output.Address == address {
 						uTxOut := &UTxOut{
 							tx.Id,
 							index,
@@ -135,7 +154,6 @@ func BlockChain() *blockChain {
 			b = &blockChain{
 				Height: 0,
 			}
-			blockDB = db.DB()
 			persistBlockChain := db.BlockChain()
 			if persistBlockChain == nil {
 				b.AddBlock()
